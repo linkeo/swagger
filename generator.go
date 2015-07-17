@@ -28,11 +28,62 @@ var outputSpec = flag.String("output", "", "Output (path) for the generated file
 var controllerClass = flag.String("controllerClass", "", "Speed up parsing by specifying which receiver objects have the controller methods")
 
 var generatedFileTemplate = `
-package main
-//This file is generated automatically. Do not try to edit it manually.
+package docs
 
-var resourceListingJson = {{resourceListing}}
-var apiDescriptionsJson = {{apiDescriptions}}
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/swagger"
+)
+
+const (
+    Rootinfo string = {{resourceListing}}
+    Subapi string = {{apiDescriptions}}
+    BasePath string= "/2.0"
+)
+
+var rootapi swagger.ResourceListing
+var apilist map[string]*swagger.ApiDeclaration
+
+func init() {
+	if beego.EnableDocs {
+		err := json.Unmarshal([]byte(Rootinfo), &rootapi)
+		if err != nil {
+			beego.Error(err)
+		}
+		err = json.Unmarshal([]byte(Subapi), &apilist)
+		if err != nil {
+			beego.Error(err)
+		}
+		beego.GlobalDocApi["Root"] = rootapi
+		for k, v := range apilist {
+			for i, a := range v.Apis {
+				a.Path = urlReplace(k + a.Path)
+				v.Apis[i] = a
+			}
+			v.BasePath = BasePath
+			beego.GlobalDocApi[strings.Trim(k, "/")] = v
+		}
+	}
+}
+
+
+func urlReplace(src string) string {
+	pt := strings.Split(src, "/")
+	for i, p := range pt {
+		if len(p) > 0 {
+			if p[0] == ':' {
+				pt[i] = "{" + p[1:] + "}"
+			} else if p[0] == '?' && p[1] == ':' {
+				pt[i] = "{" + p[2:] + "}"
+			}
+		}
+	}
+	return strings.Join(pt, "/")
+}
+
 `
 
 // It must return true if funcDeclaration is controller. We will try to parse only comments before controllers
@@ -55,7 +106,7 @@ func IsController(funcDeclaration *ast.FuncDecl) bool {
 }
 
 func generateSwaggerDocs(parser *parser.Parser) error {
-	fd, err := os.Create(path.Join(*outputSpec, "docs.go"))
+	fd, err := os.Create(path.Join(*outputSpec, "docs/docs.go"))
 	if err != nil {
 		return fmt.Errorf("Can not create document file: %v\n", err)
 	}

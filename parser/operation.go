@@ -213,7 +213,7 @@ func (operation *Operation) ParseProduceComment(commentLine string) error {
 func (operation *Operation) ParseRouterComment(commentLine string) error {
 	sourceString := strings.TrimSpace(commentLine[len("@Router"):])
 
-	re := regexp.MustCompile(`([\w\.\/\-{}]+)[^\[]+\[([^\]]+)`)
+	re := regexp.MustCompile(`([\w\.\/\-:]+)[^\[]+\[([^\]]+)`)
 	var matches []string
 
 	if matches = re.FindStringSubmatch(sourceString); len(matches) != 3 {
