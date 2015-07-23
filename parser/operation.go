@@ -71,6 +71,8 @@ func (operation *Operation) ParseComment(comment string) error {
 		operation.Nickname = strings.TrimSpace(commentLine[len(attribute):])
 	case "@description":
 		operation.Summary = strings.TrimSpace(commentLine[len(attribute):])
+	case "@notes":
+		operation.Notes = strings.TrimSpace(commentLine[len(attribute):])
 	case "@success", "@failure":
 		if err := operation.ParseResponseComment(strings.TrimSpace(commentLine[len(attribute):])); err != nil {
 			return err
@@ -145,7 +147,7 @@ func (operation *Operation) ParseParamComment(commentLine string) error {
 	swaggerParameter := Parameter{}
 	paramString := commentLine
 
-	re := regexp.MustCompile(`([-\w]+)[\s]+([\w]+)[\s]+([\w.]+)[\s]+([\w]+)[\s]+"([^"]+)"`)
+	re := regexp.MustCompile(`([-\w]+)[\s]+([\w]+)[\s]+([\w\-\.\/\{\}\[\]]+)[\s]+([\w]+)[\s]*(.*)?`)
 
 	if matches := re.FindStringSubmatch(paramString); len(matches) != 6 {
 		return fmt.Errorf("Can not parse param comment \"%s\", skipped.", paramString)
@@ -161,7 +163,7 @@ func (operation *Operation) ParseParamComment(commentLine string) error {
 		swaggerParameter.DataType = typeName
 		requiredText := strings.ToLower(matches[4])
 		swaggerParameter.Required = (requiredText == "true" || requiredText == "required")
-		swaggerParameter.Description = matches[5]
+		swaggerParameter.Description = strings.Replace(matches[5], `\"`, `"`, -1)
 
 		operation.Parameters = append(operation.Parameters, swaggerParameter)
 	}
@@ -209,7 +211,7 @@ func (operation *Operation) ParseProduceComment(commentLine string) error {
 	return nil
 }
 
-// @Router /customer/get-wishlist/{wishlist_id} [get]
+// @Router /customer/get-wishilist/:wishlist_id:int [get]
 func (operation *Operation) ParseRouterComment(commentLine string) error {
 	sourceString := strings.TrimSpace(commentLine[len("@Router"):])
 
@@ -227,7 +229,7 @@ func (operation *Operation) ParseRouterComment(commentLine string) error {
 
 // @Success 200 {object} model.OrderRow "Error message, if code != 200"
 func (operation *Operation) ParseResponseComment(commentLine string) error {
-	re := regexp.MustCompile(`([\d]+)[\s]+([\w\{\}]+)[\s]+([\w\-\.\/]+)[^"]*(.*)?`)
+	re := regexp.MustCompile(`([\d]+)[\s]+([\w\{\}]+)[\s]+([\w\-\.\/\{\}\[\]]+)[\s]*(.*)?`)
 	var matches []string
 
 	if matches = re.FindStringSubmatch(commentLine); len(matches) != 5 {
@@ -249,15 +251,22 @@ func (operation *Operation) ParseResponseComment(commentLine string) error {
 
 	response.ResponseType = strings.Trim(matches[2], "{}")
 
-	response.ResponseModel = typeName
+	if matches[2] == "{array}" {
+		operation.SetItemsType(typeName)
+		response.ResponseModel = "array[" + typeName + "]"
+	} else {
+		response.ResponseModel = typeName
+	}
+
 	if response.Code == 200 {
 		if matches[2] == "{array}" {
 			operation.SetItemsType(typeName)
-			operation.Type = "array"
+			operation.Type = "array[" + typeName + "]"
 		} else {
 			operation.Type = typeName
 		}
 	}
+	// operation.Type = ""
 
 	operation.ResponseMessages = append(operation.ResponseMessages, response)
 	return nil

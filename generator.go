@@ -60,7 +60,7 @@ func init() {
 		beego.GlobalDocApi["Root"] = rootapi
 		for k, v := range apilist {
 			for i, a := range v.Apis {
-				a.Path = urlReplace(k + a.Path)
+				a.Path = urlReplace(a.Path)
 				v.Apis[i] = a
 			}
 			v.BasePath = BasePath
@@ -113,20 +113,27 @@ func generateSwaggerDocs(parser *parser.Parser) error {
 	defer fd.Close()
 
 	var apiDescriptions bytes.Buffer
+
+	apiDescriptions.WriteString("`{")
+	isFirst := true
 	for apiKey, apiDescription := range parser.TopLevelApis {
+		if isFirst {
+			isFirst = false
+		} else {
+			apiDescriptions.WriteString(",\n")
+		}
 		apiDescriptions.WriteString("\"" + apiKey + "\":")
 
-		apiDescriptions.WriteString("`")
 		json, err := json.MarshalIndent(apiDescription, "", "    ")
 		if err != nil {
 			return fmt.Errorf("Can not serialise []ApiDescription to JSON: %v\n", err)
 		}
 		apiDescriptions.Write(json)
-		apiDescriptions.WriteString("`,")
 	}
+	apiDescriptions.WriteString("}`")
 
 	doc := strings.Replace(generatedFileTemplate, "{{resourceListing}}", "`"+string(parser.GetResourceListingJson())+"`", -1)
-	doc = strings.Replace(doc, "{{apiDescriptions}}", "map[string]string{"+apiDescriptions.String()+"}", -1)
+	doc = strings.Replace(doc, "{{apiDescriptions}}", apiDescriptions.String(), -1)
 
 	fd.WriteString(doc)
 
