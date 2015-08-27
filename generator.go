@@ -32,22 +32,24 @@ package docs
 
 import (
 	"encoding/json"
-	"strings"
-
 	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/context"
 	"github.com/astaxie/beego/swagger"
+	"strings"
 )
 
 const (
     Rootinfo string = {{resourceListing}}
     Subapi string = {{apiDescriptions}}
-    BasePath string= "/2.0"
 )
+var BasePath string
 
 var rootapi swagger.ResourceListing
 var apilist map[string]*swagger.ApiDeclaration
 
 func init() {
+	version := beego.AppConfig.DefaultString("version", "2.0")
+	BasePath = "/" + version
 	if beego.EnableDocs {
 		err := json.Unmarshal([]byte(Rootinfo), &rootapi)
 		if err != nil {
@@ -58,6 +60,7 @@ func init() {
 			beego.Error(err)
 		}
 		beego.GlobalDocApi["Root"] = rootapi
+		beego.Trace("Load Docs: version", rootapi.ApiVersion)
 		for k, v := range apilist {
 			for i, a := range v.Apis {
 				a.Path = urlReplace(a.Path)
@@ -67,6 +70,21 @@ func init() {
 			beego.GlobalDocApi[strings.Trim(k, "/")] = v
 		}
 	}
+}
+
+// SetupRouter ...
+func SetupRouter(ns *beego.Namespace) {
+	docns := beego.NewNamespace("/rawdoc")
+	docns.Get("/", func(ctx *context.Context) {
+		ctx.Output.Json(rootapi, false, false)
+	})
+	for k, v := range apilist {
+		vv := v
+		docns.Get("/"+strings.Trim(k, "/"), func(ctx *context.Context) {
+			ctx.Output.Json(vv, false, false)
+		})
+	}
+	ns.Namespace(docns)
 }
 
 
